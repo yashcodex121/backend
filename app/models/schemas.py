@@ -11,13 +11,17 @@ class UnifiedSong(BaseModel):
     title: str
     subtitle: Optional[str] = None
     artist: str
+    artists: Optional[str] = None  # Frontend compatibility
     album: Optional[str] = None
     duration: Optional[int] = Field(None, description="Duration in seconds")
     duration_str: Optional[str] = None
     thumbnail: Optional[str] = None
+    image: Optional[str] = None  # Frontend compatibility
     thumbnails: Optional[List[Dict[str, str]]] = None
     stream_url: Optional[str] = Field(None, description="Direct audio CDN/streaming URL")
+    streamUrl: Optional[str] = None  # Frontend compatibility
     proxy_stream_url: Optional[str] = Field(None, description="Local backend proxy URL for direct player playback")
+    youtubeUrl: Optional[str] = None  # Frontend compatibility
     quality_options: Optional[List[AudioStreamQuality]] = None
     has_lyrics: Optional[bool] = False
     lyrics_id: Optional[str] = None
@@ -28,6 +32,7 @@ class UnifiedSong(BaseModel):
 
 class SearchResponse(BaseModel):
     status: str = "success"
+    success: bool = True  # Frontend compatibility
     query: str
     source: str  # "unified", "jiosaavn", "youtube"
     total: int

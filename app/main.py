@@ -28,6 +28,10 @@ app.include_router(jiosaavn.router, prefix=settings.API_PREFIX)
 app.include_router(youtube.router, prefix=settings.API_PREFIX)
 app.include_router(stream.router, prefix=settings.API_PREFIX)
 
+# Compatibility aliases for frontends using /api/jiosaavn or /api/youtube
+app.include_router(jiosaavn.router, prefix="/api/jiosaavn", tags=["JioSaavn Compatibility"])
+app.include_router(youtube.router, prefix="/api/youtube", tags=["YouTube Compatibility"])
+
 
 @app.get("/")
 async def root():

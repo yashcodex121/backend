@@ -88,31 +88,48 @@ class JioSaavnService:
 
     def format_song(self, raw: Dict[str, Any]) -> UnifiedSong:
         """Transforms JioSaavn song dictionary to unified model."""
+        more_info = raw.get("more_info") if isinstance(raw.get("more_info"), dict) else {}
+        
         song_id = str(raw.get("id") or raw.get("song_id") or "")
         title = self.clean_text(raw.get("song") or raw.get("title") or "")
         subtitle = self.clean_text(raw.get("subtitle") or "")
-        artist = self.clean_text(
-            raw.get("primary_artists")
-            or raw.get("singers")
-            or raw.get("artist")
-            or raw.get("music")
-            or "Unknown Artist"
-        )
-        album = self.clean_text(raw.get("album") or "")
+        
+        # Extract artist names from all possible fields
+        artist_names = []
+        if more_info.get("artistMap") and isinstance(more_info["artistMap"], dict):
+            primary = more_info["artistMap"].get("primary_artists") or []
+            if isinstance(primary, list):
+                artist_names = [a.get("name") for a in primary if isinstance(a, dict) and a.get("name")]
+        
+        artist = ""
+        if artist_names:
+            artist = ", ".join(artist_names)
+        else:
+            artist = self.clean_text(
+                raw.get("primary_artists")
+                or raw.get("singers")
+                or raw.get("artist")
+                or more_info.get("music")
+                or raw.get("subtitle")
+                or "Unknown Artist"
+            )
+        
+        album = self.clean_text(raw.get("album") or more_info.get("album") or "")
         
         duration = None
-        if raw.get("duration"):
+        raw_dur = raw.get("duration") or more_info.get("duration")
+        if raw_dur:
             try:
-                duration = int(raw["duration"])
+                duration = int(raw_dur)
             except (ValueError, TypeError):
                 duration = None
 
-        raw_image = raw.get("image") or ""
+        raw_image = raw.get("image") or more_info.get("image") or ""
         thumbnails = self.format_thumbnails(raw_image)
         high_thumb = thumbnails[-1]["url"] if thumbnails else raw_image.replace("http://", "https://")
 
-        # Decrypt media URL if available
-        enc_url = raw.get("encrypted_media_url")
+        # Decrypt media URL if available (check both top-level and inside more_info)
+        enc_url = raw.get("encrypted_media_url") or more_info.get("encrypted_media_url")
         decrypted_url = self.decrypt_url(enc_url) if enc_url else (raw.get("media_preview_url") or None)
         quality_options = self.get_quality_urls(decrypted_url)
         
@@ -125,7 +142,7 @@ class JioSaavnService:
         if not best_stream_url and quality_options:
             best_stream_url = quality_options[-1].url
 
-        has_lyrics = str(raw.get("has_lyrics", "")).lower() == "true"
+        has_lyrics = str(raw.get("has_lyrics") or more_info.get("has_lyrics", "")).lower() == "true"
         lyrics_id = str(raw.get("id", "")) if has_lyrics else None
 
         return UnifiedSong(
@@ -134,10 +151,24 @@ class JioSaavnService:
             title=title,
             subtitle=subtitle,
             artist=artist,
+            artists=artist,
             album=album,
             duration=duration,
             duration_str=self.format_duration(duration),
             thumbnail=high_thumb,
+            image=high_thumb,
+            thumbnails=thumbnails,
+            stream_url=best_stream_url,
+            streamUrl=best_stream_url,
+            proxy_stream_url=f"/api/stream/audio?source=jiosaavn&id={song_id}",
+            quality_options=quality_options,
+            has_lyrics=has_lyrics,
+            lyrics_id=lyrics_id,
+            year=str(raw.get("year") or more_info.get("year", "")) or None,
+            language=raw.get("language") or more_info.get("language") or None,
+            copyright=self.clean_text(raw.get("copyright_text") or more_info.get("copyright_text") or "") or None,
+            raw_data=raw,
+        )
             thumbnails=thumbnails,
             stream_url=best_stream_url,
             proxy_stream_url=f"/api/stream/audio?source=jiosaavn&id={song_id}",
