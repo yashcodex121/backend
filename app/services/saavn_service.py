@@ -169,17 +169,6 @@ class JioSaavnService:
             copyright=self.clean_text(raw.get("copyright_text") or more_info.get("copyright_text") or "") or None,
             raw_data=raw,
         )
-            thumbnails=thumbnails,
-            stream_url=best_stream_url,
-            proxy_stream_url=f"/api/stream/audio?source=jiosaavn&id={song_id}",
-            quality_options=quality_options,
-            has_lyrics=has_lyrics,
-            lyrics_id=lyrics_id,
-            year=str(raw.get("year", "")) or None,
-            language=raw.get("language") or None,
-            copyright=self.clean_text(raw.get("copyright_text") or "") or None,
-            raw_data=raw,
-        )
 
     async def search_songs(self, query: str, page: int = 1, limit: int = 20) -> List[UnifiedSong]:
         """Search songs on JioSaavn."""
