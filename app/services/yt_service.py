@@ -39,8 +39,117 @@ class YouTubeService:
             {"quality": "max", "url": f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"},
         ]
 
+    def _parse_time_str(self, s: Optional[str]) -> Optional[int]:
+        if not s:
+            return None
+        parts = s.split(":")
+        try:
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            return int(parts[0])
+        except Exception:
+            return None
+
+    def _innertube_search(self, query: str, limit: int = 15) -> List[UnifiedSong]:
+        import urllib.request
+        import json
+        
+        url = "https://www.youtube.com/youtubei/v1/search"
+        payload = json.dumps({
+            "context": {
+                "client": {
+                    "clientName": "WEB",
+                    "clientVersion": "2.20230515.00.00"
+                }
+            },
+            "query": query
+        }).encode("utf-8")
+        
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+        )
+        
+        with urllib.request.urlopen(req, timeout=6) as res:
+            data = json.loads(res.read().decode("utf-8"))
+            
+        contents = (
+            data.get("contents", {})
+            .get("twoColumnSearchResultsRenderer", {})
+            .get("primaryContents", {})
+            .get("sectionListRenderer", {})
+            .get("contents", [])
+        )
+        
+        songs = []
+        for sec in contents:
+            items = sec.get("itemSectionRenderer", {}).get("contents", [])
+            for it in items:
+                if "videoRenderer" in it:
+                    v = it["videoRenderer"]
+                    video_id = v.get("videoId")
+                    if not video_id:
+                        continue
+                    
+                    title = "".join([r.get("text", "") for r in v.get("title", {}).get("runs", [])]) or "Movie / Video"
+                    channel = (
+                        "".join([r.get("text", "") for r in v.get("ownerText", {}).get("runs", [])])
+                        or "".join([r.get("text", "") for r in v.get("longBylineText", {}).get("runs", [])])
+                        or "Cinema Stream"
+                    )
+                    dur_str = v.get("lengthText", {}).get("simpleText") or ""
+                    dur_sec = self._parse_time_str(dur_str)
+                    
+                    high_thumb = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+                    thumbnails = self.format_thumbnails(video_id)
+                    
+                    view_text = v.get("viewCountText", {}).get("simpleText") or ""
+                    
+                    song = UnifiedSong(
+                        id=video_id,
+                        source="youtube",
+                        title=title,
+                        subtitle=channel,
+                        artist=channel,
+                        artists=channel,
+                        album="Cinema Stream",
+                        duration=dur_sec,
+                        duration_str=dur_str or self.format_duration(dur_sec),
+                        thumbnail=high_thumb,
+                        image=high_thumb,
+                        thumbnails=thumbnails,
+                        stream_url=None,
+                        streamUrl=f"https://www.youtube.com/watch?v={video_id}",
+                        youtubeUrl=f"https://www.youtube.com/watch?v={video_id}",
+                        proxy_stream_url=f"/api/stream/audio?source=youtube&id={video_id}",
+                        quality_options=[],
+                        has_lyrics=False,
+                        raw_data={
+                            "url": f"https://www.youtube.com/watch?v={video_id}",
+                            "view_count_text": view_text
+                        }
+                    )
+                    songs.append(song)
+                    if len(songs) >= limit:
+                        return songs
+                        
+        return songs
+
     def _sync_search(self, query: str, limit: int = 15) -> List[UnifiedSong]:
-        """Performs flat search on YouTube (fast, does not resolve stream URLs)."""
+        """Performs search on YouTube using ultra-fast Innertube API with yt-dlp fallback."""
+        try:
+            results = self._innertube_search(query, limit)
+            if results and len(results) > 0:
+                return results
+        except Exception:
+            pass
+
         search_query = f"ytsearch{limit}:{query}"
         opts = {
             **self.default_ydl_opts,
